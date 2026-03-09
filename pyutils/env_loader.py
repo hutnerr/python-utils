@@ -6,7 +6,9 @@ try:
     load_dotenv()
     Clogger.info("dotenv loaded successfully")
 except ImportError:
-    Clogger.warning("dotenv was not loaded")
+    Clogger.error("dotenv threw an ImportError")
+except Exception as e:
+    Clogger.warning("dotenv was not loaded for some other reason")
 
 def get_env(name: str, default: str | None = None) -> str | None:
     value = os.environ.get(name, default)
