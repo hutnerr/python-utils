@@ -1,4 +1,4 @@
-# python-utils
+# Python Utilities
 
 A small personal Python utility library containing code I frequently use across my personal projects.
 
