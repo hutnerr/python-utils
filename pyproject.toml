@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pyutils"
+version = "0.1.0"
+description = "Personal Python utility library"
+authors = [{ name = "Hunter Baker" }]
+requires-python = ">=3.8"
+
+dependencies = [
+    "colorama>=0.4",
+    "python-dotenv>=1.0",
+    "requests>=2.0"
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["pyutils*"]

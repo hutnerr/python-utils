@@ -1,5 +1,5 @@
 import requests
-from util.clogger import Clogger
+from pyutils.clogger import Clogger
 
 def check_response(response: requests.Response) -> bool:
         # Clogger.debug(response.text)

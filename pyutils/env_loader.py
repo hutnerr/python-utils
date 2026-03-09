@@ -1,5 +1,5 @@
 import os
-from util.clogger import Clogger
+from pyutils.clogger import Clogger
 from dotenv import load_dotenv
 
 try:
