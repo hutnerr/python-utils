@@ -222,10 +222,13 @@ class Clogger:
         Clogger._log(f"[{tag.upper()}]", msg, Fore.CYAN, LogLevel.INFO, cfg)
 
     @staticmethod
-    def error(msg: str, settings_override: dict | None = None):
-        """Log an error message."""
+    def error(msg: str, settings_override: dict | None = None, exc: type[Exception] | None = None):
+        """Log an error message and optionally raise an exception."""
         cfg = Clogger._resolve_config(settings_override)
         Clogger._log("[ERROR]", msg, Fore.RED, LogLevel.ERROR, cfg)
+
+        if exc:
+            raise exc(msg)  
 
     @staticmethod
     def warn(msg: str, settings_override: dict | None = None):

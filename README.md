@@ -53,6 +53,7 @@ Per-call overrides let you deviate from the global config for a single line:
 ```python
 Clogger.info("Detailed trace.", settings_override=CloggerOverrideFactory.verbose())
 Clogger.error("Saved quietly.", settings_override=CloggerOverrideFactory.file_only("errors.log"))
+Clogger.error("Key not found", exc=KeyError) # also throws exception after logging
 Clogger.debug("Pretty printed.", settings_override=CloggerOverrideFactory.pretty())
 
 # Combine overrides
