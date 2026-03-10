@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pyutils"
-version = "1.0.0"
+version = "1.0.1"
 description = "Personal Python utility library"
 authors = [{ name = "Hunter Baker" }]
 requires-python = ">=3.8"

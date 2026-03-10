@@ -7,6 +7,8 @@ from .response_helper import check_response
 
 __all__ = [
     "Clogger",
+    "Clogobj",
+    "ClogobjFactory",
     "CloggerConfig",
     "CloggerOverrideFactory",
     "CloggerSetting",
