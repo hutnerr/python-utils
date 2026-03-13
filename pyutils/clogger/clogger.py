@@ -41,7 +41,17 @@ class CloggerSetting(enum.Enum):
     LOG_FILE_PATH       = "log_file_path"
     MIN_LOG_LEVEL       = "min_log_level"
     PRINT_DISABLED      = "print_disabled"
+    USE_TAG             = "use_tag"
+    DISABLE_COLORS      = "disable_colors"
 
+class CloggerColor(enum.Enum):
+    RED     = Fore.RED
+    GREEN   = Fore.GREEN
+    YELLOW  = Fore.YELLOW
+    BLUE    = Fore.BLUE
+    MAGENTA = Fore.MAGENTA
+    CYAN    = Fore.CYAN
+    RESET   = Style.RESET_ALL
 
 class CloggerConfig:
     """
@@ -61,6 +71,8 @@ class CloggerConfig:
     - `log_file_path`:       path to the log file (default: clogger.log)
     - `min_log_level`:       minimum log level to print — messages below this level are ignored
     - `print_disabled`:      if True, suppresses terminal output but still writes to file if write_to_file is enabled
+    - `use_tag`:             if True, prepends the level tag (e.g. [INFO]) to each log line
+    - `disable_colors`:      if True, suppresses all ANSI color codes in terminal output
 
     Examples:
         Clogger.config = CloggerConfig(disabled=True)
@@ -81,6 +93,8 @@ class CloggerConfig:
         log_file_path:       str      = "clogger.log",
         min_log_level:       LogLevel = LogLevel.DEBUG,
         print_disabled:      bool     = False,
+        use_tag:             bool     = True,
+        disable_colors:      bool     = False,
     ):
         self.disabled            = disabled
         self.debug_enabled       = debug_enabled
@@ -93,6 +107,8 @@ class CloggerConfig:
         self.log_file_path       = log_file_path
         self.min_log_level       = min_log_level
         self.print_disabled      = print_disabled
+        self.use_tag             = use_tag
+        self.disable_colors      = disable_colors
 
     @classmethod
     def from_dict(cls, settings: dict[CloggerSetting | str, any]) -> "CloggerConfig":
@@ -127,6 +143,8 @@ class CloggerConfig:
             "log_file_path":       self.log_file_path,
             "min_log_level":       self.min_log_level,
             "print_disabled":      self.print_disabled,
+            "use_tag":             self.use_tag,
+            "disable_colors":      self.disable_colors,
         }
 
 
@@ -134,20 +152,22 @@ class Clogger:
     config: CloggerConfig = CloggerConfig()
 
     @staticmethod
-    def _resolve_config(settings_override: dict | None) -> CloggerConfig:
-        """Merge global config with a per-call override dict, returning a fresh CloggerConfig."""
+    def _resolve_config(settings_override: dict | CloggerConfig | None, base: CloggerConfig | None = None) -> CloggerConfig:
+        """Merge a base config (or global config) with a per-call override dict or CloggerConfig."""
+        base = base or Clogger.config
         if not settings_override:
-            return Clogger.config
-        
-        base = Clogger.config.__dict__.copy()
+            return base
+        if isinstance(settings_override, CloggerConfig):
+            settings_override = settings_override.to_dict()
+
+        base_dict = base.__dict__.copy()
         override = CloggerConfig.from_dict(settings_override).__dict__
 
-        # only apply keys that were explicitly passed in the override
         normalized_keys = {
             (k.value if isinstance(k, CloggerSetting) else k)
             for k in settings_override.keys()
         }
-        merged = {k: (override[k] if k in normalized_keys else v) for k, v in base.items()}
+        merged = {k: (override[k] if k in normalized_keys else v) for k, v in base_dict.items()}
         return CloggerConfig(**merged)
 
     @staticmethod
@@ -160,6 +180,10 @@ class Clogger:
             ts = time.strftime('%H:%M:%S', time.localtime())
         else:
             ts = time.strftime('%Y-%m-%d %H:%M:%S EST', time.localtime())
+
+        if cfg.disable_colors:
+            return f"{ts} "
+        
         return f"{Back.BLACK}{Fore.GREEN}{ts}{Style.RESET_ALL} "
 
     @staticmethod
@@ -174,58 +198,103 @@ class Clogger:
         return "unknown"
 
     @staticmethod
-    def _log(tag: str, msg: str, color: str = "", level: LogLevel = LogLevel.DEBUG, cfg: CloggerConfig = None):
+    def _log(tag: str, msg: str, color: CloggerColor = CloggerColor.CYAN, level: LogLevel = LogLevel.DEBUG, cfg: CloggerConfig = None):
         cfg = cfg or Clogger.config
 
         if cfg.disabled:
             return
+        
         if level.value > cfg.min_log_level.value:
             return
+
+        # build tag segment — omit entirely (including separator) when use_tag is False
+        if cfg.use_tag:
+            if cfg.disable_colors:
+                tag_part = f"{tag:<8} |"
+            else:
+                tag_part = f"{color.value}{tag:<8}{Style.RESET_ALL} |"
+            clean_tag_part = f"{tag:<8} |"
+        else:
+            tag_part = ""
+            clean_tag_part = ""
 
         # if pprint is enabled and msg is a complex object, pretty-print it below the tag line
         if cfg.pprint_enabled and isinstance(msg, (dict, list, tuple, set)):
             if not cfg.print_disabled:
                 timestamp = Clogger._getTimestamp(cfg)
                 source = f" {Fore.WHITE}{Style.DIM}{Clogger._getCaller()}{Style.RESET_ALL} |" if cfg.show_source_file else ""
-                print(f"{timestamp}{color}{tag:<8}{Style.RESET_ALL} |{source}", flush=cfg.force_flush)
+                print(f"{timestamp}{tag_part}{source}", flush=cfg.force_flush)
                 pprint(msg)
             if cfg.write_to_file:
                 buf = io.StringIO()
                 pprint(msg, stream=buf)
                 source_part = f" {Clogger._getCaller()} |" if cfg.show_source_file else ""
                 with open(cfg.log_file_path, "a") as f:
-                    f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {tag:<8} |{source_part}\n{buf.getvalue()}")
+                    f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {clean_tag_part}{source_part}\n{buf.getvalue()}")
             return
 
         timestamp = Clogger._getTimestamp(cfg)
 
         if cfg.show_source_file:
             caller = Clogger._getCaller()
-            source = f" {Fore.WHITE}{Style.DIM}{caller}{Style.RESET_ALL} |"
+            if cfg.disable_colors:
+                source = f" {caller} |"
+            else:
+                source = f" {Fore.WHITE}{Style.DIM}{caller}{Style.RESET_ALL} |"
         else:
             source = ""
 
         if not cfg.print_disabled:
-            line = f"{timestamp}{color}{tag:<8}{Style.RESET_ALL} |{source} {msg}"
+            sep = " " if (tag_part or source or timestamp) else ""
+            line = f"{timestamp}{tag_part}{source}{sep}{msg}"
             print(line, flush=cfg.force_flush)
 
         if cfg.write_to_file:
             source_part = f" {Clogger._getCaller()} |" if cfg.show_source_file else ""
-            clean_line = f"{time.strftime('%Y-%m-%d %H:%M:%S')} {tag:<8} |{source_part} {msg}"
+            clean_ts = time.strftime('%Y-%m-%d %H:%M:%S')
+            clean_sep = " " if (clean_ts or clean_tag_part or source_part) else ""
+            clean_line = f"{clean_ts} {clean_tag_part}{source_part}{clean_sep}{msg}"
             with open(cfg.log_file_path, "a") as f:
                 f.write(clean_line + "\n")
 
     @staticmethod
-    def log(tag: str, msg: str, settings_override: dict | None = None):
+    def make_log(
+        tag: str,
+        color: CloggerColor = CloggerColor.CYAN,
+        level: LogLevel = LogLevel.INFO,
+        settings_override: dict | None = None,
+    ):
+        """
+        Returns a logger function that logs with the given tag, color, and level.
+
+        settings_override sets a baseline baked into every call of the returned
+        function. The returned function accepts its own settings_override that
+        layers on top, with call-time values taking priority.
+
+        The returned function has the signature:
+            logger(msg: str, settings_override: dict | None = None)
+        """
+        formatted_tag = f"[{tag.upper()}]"
+        baseline_cfg = Clogger._resolve_config(settings_override)
+
+        def logger(msg: str, settings_override: dict | None = None):
+            f"""Log a [{tag.upper()}] message."""
+            cfg = Clogger._resolve_config(settings_override, base=baseline_cfg)
+            Clogger._log(formatted_tag, msg, color, level, cfg)
+
+        return logger
+
+    @staticmethod
+    def log(tag: str, msg: str, settings_override: dict | None = None, color: CloggerColor = CloggerColor.CYAN):
         """Log with a custom tag. Equal log level to INFO."""
         cfg = Clogger._resolve_config(settings_override)
-        Clogger._log(f"[{tag.upper()}]", msg, Fore.CYAN, LogLevel.INFO, cfg)
+        Clogger._log(f"[{tag.upper()}]", msg, color, LogLevel.INFO, cfg)
 
     @staticmethod
     def error(msg: str, settings_override: dict | None = None, exc: type[Exception] | None = None):
         """Log an error message and optionally raise an exception."""
         cfg = Clogger._resolve_config(settings_override)
-        Clogger._log("[ERROR]", msg, Fore.RED, LogLevel.ERROR, cfg)
+        Clogger._log("[ERROR]", msg, CloggerColor.RED, LogLevel.ERROR, cfg)
 
         if exc:
             raise exc(msg)  
@@ -234,26 +303,26 @@ class Clogger:
     def warn(msg: str, settings_override: dict | None = None):
         """Log a warning message."""
         cfg = Clogger._resolve_config(settings_override)
-        Clogger._log("[WARN]", msg, Fore.YELLOW, LogLevel.WARN, cfg)
+        Clogger._log("[WARN]", msg, CloggerColor.YELLOW, LogLevel.WARN, cfg)
 
     @staticmethod
     def info(msg: str, settings_override: dict | None = None):
         """Log an info message."""
         cfg = Clogger._resolve_config(settings_override)
-        Clogger._log("[INFO]", msg, Fore.BLUE, LogLevel.INFO, cfg)
+        Clogger._log("[INFO]", msg, CloggerColor.BLUE, LogLevel.INFO, cfg)
 
     @staticmethod
     def action(msg: str, settings_override: dict | None = None):
         """Log an action message."""
         cfg = Clogger._resolve_config(settings_override)
-        Clogger._log("[ACTION]", msg, Fore.GREEN, LogLevel.ACTION, cfg)
+        Clogger._log("[ACTION]", msg, CloggerColor.GREEN, LogLevel.ACTION, cfg)
 
     @staticmethod
     def debug(msg: str, settings_override: dict | None = None):
         """Log a debug message. Respects both debug_enabled and min_log_level."""
         cfg = Clogger._resolve_config(settings_override)
         if cfg.debug_enabled:
-            Clogger._log("[DEBUG]", msg, Fore.MAGENTA, LogLevel.DEBUG, cfg)
+            Clogger._log("[DEBUG]", msg, CloggerColor.MAGENTA, LogLevel.DEBUG, cfg)
 
     @staticmethod
     def log_errors(func):

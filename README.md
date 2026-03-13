@@ -6,107 +6,134 @@ More about the package can be seen [here](https://www.hunter-baker.com/pages/pro
 
 ## Installation
 Install directly from GitHub:
-```
-pip install pyutils @ git+https://github.com/hutnerr/python-utils.git
+```bash
+pip install "pyutils @ git+https://github.com/hutnerr/python-utils.git"
 ```
 Or add it to your `requirements.txt`:
 ```
 pyutils @ git+https://github.com/hutnerr/python-utils.git
 ```
 Then install:
-```
+```bash
 pip install -r requirements.txt
 ```
 
 ## What's Inside
 - `Clogger`: A static utility class for enhanced logging with timestamps, source tracking, colors, and custom log types.
-- `Clogobj`: A wrapper around Clogger for creating individual logger instances with their own config.
+- `Clogobj`: A wrapper around Clogger for creating individual logger instances with their own config and optional name tagging.
+- `CloggerOverrideFactory`: Convenience factory for building per-call settings overrides.
+- `ClogobjFactory`: Preset factory for quickly spinning up configured `Clogobj` instances.
 - `get_env()`: Safely retrieves an environment variable.
 - `check_response()`: Performs basic validation on a `requests.Response` object.
 
 ## Clogger
 
 A static logger with colored output, timestamps, source tracking, and per-call overrides.
-```python
-from pyutils import Clogger, CloggerConfig, CloggerOverrideFactory, LogLevel
 
-# Basic log levels
+```python
+from pyutils import Clogger, CloggerConfig, CloggerSetting, CloggerOverrideFactory, LogLevel
+
 Clogger.info("Server started.")
 Clogger.warn("High memory usage.")
-Clogger.error("Failed to connect to database.")
+Clogger.error("Failed to connect.", exc=KeyError)  # logs then raises
 Clogger.debug("Request payload: {...}")
 Clogger.action("User clicked submit.")
-Clogger.log("BOOT", "Config loaded.")        # custom tag
+Clogger.log("BOOT", "Config loaded.")              # custom tag
 ```
 
-Adjust global behavior by swapping the config:
+Swap the global config at any time:
 ```python
-# Only print WARN and above
 Clogger.config = CloggerConfig(min_log_level=LogLevel.WARN)
-
-# Disable terminal output and write everything to a file instead
+Clogger.config = CloggerConfig(disable_colors=True, use_tag=False)
 Clogger.config = CloggerConfig(print_disabled=True, write_to_file=True, log_file_path="run.log")
-
-# Reset to defaults
-Clogger.config = CloggerConfig()
+Clogger.config = CloggerConfig()  # reset
 ```
 
-Per-call overrides let you deviate from the global config for a single line:
+Per-call overrides let you deviate from global config for a single line:
 ```python
-Clogger.info("Detailed trace.", settings_override=CloggerOverrideFactory.verbose())
+Clogger.info("Trace.", settings_override=CloggerOverrideFactory.verbose())
 Clogger.error("Saved quietly.", settings_override=CloggerOverrideFactory.file_only("errors.log"))
-Clogger.error("Key not found", exc=KeyError) # also throws exception after logging
-Clogger.debug("Pretty printed.", settings_override=CloggerOverrideFactory.pretty())
+Clogger.debug("Dict dump.", settings_override=CloggerOverrideFactory.pretty())
 
-# Combine overrides
+# combine multiple overrides — later keys win on conflict
 Clogger.info("Verbose and saved.", settings_override=CloggerOverrideFactory.combine(
     CloggerOverrideFactory.verbose(),
-    CloggerOverrideFactory.write_to_file("verbose.log")
+    CloggerOverrideFactory.write_to_file("verbose.log"),
+    {CloggerSetting.DISABLE_COLORS: True}
 ))
+```
+
+Create reusable custom loggers with `make_log`:
+```python
+log_boot = Clogger.make_log("BOOT", color=CloggerColor.CYAN, level=LogLevel.INFO)
+log_boot("App starting up.")   # [BOOT]    | main.py:12 | App starting up.
+
+# bake in a settings baseline — still overridable per call
+log_trace = Clogger.make_log(
+    "TRACE",
+    color=CloggerColor.MAGENTA,
+    settings_override={CloggerSetting.SIMPLIFY_TIMESTAMPS: False}
+)
+log_trace("Deep trace.", settings_override={CloggerSetting.SHOW_SOURCE_FILE: False})
 ```
 
 ## Clogobj
 
-Individual logger instances with their own baked-in config. Useful when different parts of your
-app need different logging behavior without touching the global `Clogger.config`.
+Instance-based loggers with their own baked-in config and optional name. Useful when different
+parts of your app need different logging behavior without touching global `Clogger.config`.
+
 ```python
 from pyutils import Clogobj, ClogobjFactory, CloggerConfig
 
-# Pre-built presets
 verbose_logger = ClogobjFactory.verbose()
-error_logger   = ClogobjFactory.errors_only()
-silent_logger  = ClogobjFactory.silent()        # useful in tests
+silent_logger  = ClogobjFactory.silent()   # useful in tests
+file_logger    = ClogobjFactory.file_only("run.log")
 
 verbose_logger.info("Full timestamps and source shown.")
-error_logger.warning("Only WARN and above will print.")
 silent_logger.error("No output at all.")
 ```
 
-Tag a logger to a specific module - no need to pass a tag on every call:
+Name a logger to a module — the name appears before the level tag on every line:
 ```python
-db_logger   = ClogobjFactory.for_module("Database")
-auth_logger = ClogobjFactory.for_module("Auth", log_func=Clogger.warning)
-
-db_logger.tagged("Connection established.")      # [Database] Connection established.
-db_logger.tagged("Query timeout.", tag="SLOW")   # one-off override: [SLOW] Query timeout.
-auth_logger.tagged("Invalid token.")             # [Auth] as WARNING
+# 17:58:40 [Database][INFO]  | db.py:42 | Connection established.
+db_logger = ClogobjFactory.for_module("Database")
+db_logger.info("Connection established.")
+db_logger.warn("Slow query detected.")
 ```
 
-Write a component's logs to its own file:
+`make_log` on an instance returns a bound logger that inherits the instance's settings and name:
 ```python
-db_logger = ClogobjFactory.for_file("db.log", also_print=True)
-db_logger.info("Printed to terminal and saved to db.log.")
+auth = Clogobj(
+    settings=CloggerConfig(simplify_timestamps=False),
+    name="Auth",
+)
+
+log_token = auth.make_log("TOKEN", color=CloggerColor.YELLOW, level=LogLevel.WARN)
+log_token("Invalid token.")   # 2025-01-01 17:58:40 EST [Auth][TOKEN]  | auth.py:7 | Invalid token.
+
+# per-call overrides still layer on top
+log_token("Suppressed.", settings_override={CloggerSetting.PRINT_DISABLED: True})
+```
+
+Use `log_errors` as a decorator to automatically route exceptions through the instance:
+```python
+db = ClogobjFactory.for_module("Database")
+
+@db.log_errors
+def connect():
+    raise ConnectionError("timeout")
+
+connect()  # [Database][ERROR] | db.py:8 | connect failed: timeout
 ```
 
 Fully custom when nothing else fits:
 ```python
-boot_logger = ClogobjFactory.custom(
+boot = ClogobjFactory.custom(
     settings=CloggerConfig(simplify_timestamps=False, show_source_file=True),
-    default_tag="BOOT",
-    default_log_func=Clogger.info,
+    name="BOOT",
 )
-boot_logger.log("App starting up.")
-boot_logger.tagged("Config loaded.")
+boot.info("App starting up.")
+boot.log("INIT", "Config loaded.")
 ```
 
 ## Other Utilities

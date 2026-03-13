@@ -1,4 +1,4 @@
-from .clogger.clogger import Clogger, CloggerConfig, CloggerSetting, LogLevel
+from .clogger.clogger import Clogger, CloggerConfig, CloggerSetting, LogLevel, CloggerColor
 from .clogger.clogger_override_factory import CloggerOverrideFactory
 from .clogger.clogobj import Clogobj
 from .clogger.clogobj_factory import ClogobjFactory
@@ -10,6 +10,7 @@ __all__ = [
     "Clogobj",
     "ClogobjFactory",
     "CloggerConfig",
+    "CloggerColor",
     "CloggerOverrideFactory",
     "CloggerSetting",
     "LogLevel",
