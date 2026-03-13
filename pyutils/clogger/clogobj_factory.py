@@ -1,5 +1,5 @@
 from .clogobj import Clogobj
-from .clogger import Clogger, CloggerConfig, LogLevel
+from .clogger import CloggerConfig, LogLevel
 
 
 class ClogobjFactory:
@@ -15,7 +15,7 @@ class ClogobjFactory:
         logger.info("Detailed output with full timestamps.")
 
         logger = ClogobjFactory.for_module("AuthService")
-        logger.tagged("User logged in")   # [AuthService] User logged in
+        logger.info("User logged in")  # [AuthService][INFO] | User logged in
     """
 
     @staticmethod
@@ -25,10 +25,9 @@ class ClogobjFactory:
 
     @staticmethod
     def verbose() -> Clogobj:
-        """Full timestamps, source file shown, delegates log() to info."""
+        """Full timestamps, source file shown."""
         return Clogobj(
             settings=CloggerConfig(simplify_timestamps=False, show_source_file=True),
-            default_log_func=Clogger.info,
         )
 
     @staticmethod
@@ -40,10 +39,9 @@ class ClogobjFactory:
 
     @staticmethod
     def debug() -> Clogobj:
-        """Debug-focused logger — log() delegates to Clogger.debug."""
+        """Debug-focused logger with simplified timestamps."""
         return Clogobj(
             settings=CloggerConfig(debug_enabled=True, simplify_timestamps=True),
-            default_log_func=Clogger.debug,
         )
 
     @staticmethod
@@ -55,10 +53,9 @@ class ClogobjFactory:
 
     @staticmethod
     def errors_only() -> Clogobj:
-        """Only WARN and above — log() delegates to Clogger.error."""
+        """Only WARN and above."""
         return Clogobj(
             settings=CloggerConfig(min_log_level=LogLevel.WARN),
-            default_log_func=Clogger.error,
         )
 
     @staticmethod
@@ -69,19 +66,16 @@ class ClogobjFactory:
         )
 
     @staticmethod
-    def for_module(module_name: str, log_func: callable = None) -> Clogobj:
+    def for_module(module_name: str) -> Clogobj:
         """
         Logger pre-tagged with a module or component name.
-        tagged() calls will use the module name automatically.
+        The name will appear before the level tag on every log line.
 
         Example:
             logger = ClogobjFactory.for_module("Database")
-            logger.tagged("Connection established")  # [Database] Connection established
+            logger.info("Connection established")  # [Database][INFO] | Connection established
         """
-        return Clogobj(
-            default_tag=module_name,
-            default_log_func=log_func or Clogger.info,
-        )
+        return Clogobj(name=module_name)
 
     @staticmethod
     def for_file(path: str, also_print: bool = True) -> Clogobj:
@@ -100,21 +94,20 @@ class ClogobjFactory:
     @staticmethod
     def custom(
         settings: CloggerConfig = None,
-        default_tag: str = "LOG",
-        default_log_func: callable = None,
+        name: str = None,
+        show_name: bool = True,
     ) -> Clogobj:
         """
-        Fully custom logger — pass in whatever config, tag, and log func you want.
+        Fully custom logger — pass in whatever config and name you want.
 
         Example:
             logger = ClogobjFactory.custom(
                 settings=CloggerConfig(debug_enabled=False),
-                default_tag="BOOT",
-                default_log_func=Clogger.warn,
+                name="BOOT",
             )
         """
         return Clogobj(
             settings=settings,
-            default_tag=default_tag,
-            default_log_func=default_log_func,
+            name=name,
+            show_name=show_name,
         )

@@ -1,5 +1,4 @@
 from .clogger import *
-from .clogger_override_factory import CloggerOverrideFactory
 
 class Clogobj:
     def __init__(
