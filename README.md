@@ -2,6 +2,8 @@
 A small personal Python utility library containing code I frequently use across my personal projects.
 Licensed under the MIT License.
 
+More about the package can be seen [here](https://www.hunter-baker.com/pages/projects/pyutils.html)
+
 ## Installation
 Install directly from GitHub:
 ```
