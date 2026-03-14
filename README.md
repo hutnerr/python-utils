@@ -136,6 +136,43 @@ boot.info("App starting up.")
 boot.log("INIT", "Config loaded.")
 ```
 
+## Option & Result
+
+Rust-inspired types for explicit null and error handling - no bare `None` checks or scattered `try/except`.
+
+```python
+from pyutils import Option, Result
+```
+
+**Option** wraps a value that may or may not exist. Unlike bare `None`, `Some(None)` is a valid distinct state.
+
+```python
+Option.some(42).unwrap()              # 42
+Option.none().unwrap_or(0)            # 0
+Option.none().unwrap_or_else(fn)      # fn() — only called if None
+```
+
+**Result** wraps either a success value or an error. `Ok(None)` and `Err(None)` are both valid and distinguishable.
+
+```python
+Result.ok(42).unwrap()                # 42
+Result.err("oops").unwrap_err()       # "oops"
+Result.err("oops").unwrap_or(0)       # 0
+Result.err("oops").expect("failed")   # raises: ValueError: failed: 'oops'
+```
+
+Both types support `bool()` coercion, equality, hashing, and iter unpacking:
+
+```python
+bool(Option.some(0))     # True  — state-based, not value-based
+bool(Option.none())      # False
+bool(Result.ok(None))    # True
+bool(Result.err("x"))    # False
+
+Option.some(1) == Option.some(1)    # True
+(value,) = Option.some("hello")     # unpacking
+```
+
 ## Other Utilities
 ```python
 from pyutils import get_env, check_response
